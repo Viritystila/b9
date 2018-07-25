@@ -39,6 +39,8 @@
     (defonce cbus3 (control-bus 1))
     ;Audio
     (defonce abus1 (audio-bus))
+                                        ;in bus
+
 
     (defonce main-g (group "main bus"))
     (defonce early-g (group "early bus" :head main-g))
@@ -209,10 +211,7 @@
 
 (def syntherf (synther :amp 0.0015 :freq 2 :in-abus abus1 :in-cbus cbus1))
 
-(ctl syntherf :amp 0.02 :freq 2 :in-cbus cbus2 :dec 0.1)
-
-
-(kill 56)
+(ctl syntherf :amp 0.02 :freq 2 :in-cbus 0 :dec 0.1)
 
 (kill syntherf)
 
@@ -249,10 +248,18 @@
 
 (def noisef (noise [:tail later-g] :freq2 cbus1 :amp 0.2))
 
-(ctl noisef :freq2 cbus3 :amp 0.1 :freq 30)
-
-
+(ctl noisef :freq2 cbus3 :amp 0.1 :freq cbus1)
 
 (kill noisef)
 
-(kill 128)
+(defsynth in-bus-synth [in-bus 0 gain 10 cutoff 10]
+  (let [src (sound-in in-bus)
+        srci (lpf src cutoff)
+        srco (* gain srci (pink-noise))]
+    (out 0 (pan2 (+ srco (sin-osc srco) )))))
+
+(def ibs (in-bus-synth :cutoff 440 :gain 1))
+
+(ctl ibs :gain 1 :cutoff 100)
+
+(kill ibs)
