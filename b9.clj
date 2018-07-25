@@ -36,6 +36,7 @@
     ;Control
     (defonce cbus1 (control-bus 1))
     (defonce cbus2 (control-bus 1))
+    (defonce cbus3 (control-bus 1))
     ;Audio
     (defonce abus1 (audio-bus))
 
@@ -47,6 +48,7 @@
   (defonce buffer1 (buffer 32))
   (defonce buffer2 (buffer 32))
   (defonce buffer3 (buffer 16))
+  (defonce buffer4 (buffer 32))
   )
 
 
@@ -64,7 +66,7 @@
   (let [src (in in-bus)]
     (out 0 (pan2 (* amp src)))))
 
-(def sn2f (sn2 [:tail early-g] :in-bus abus1))
+(def sn2f (sn2 [:tail early-g] :in-bus abus1 :amp 0.01))
 
 (defsynth sn3 [out-bus 0 value 22 amp 5]
   (let [ov (sin-osc:kr value)]
@@ -78,9 +80,21 @@
 
 (def sn4f (sn4 [:tail early-g] :out-bus cbus2 :value 1 :amp 60))
 
-(ctl sn3f :value 0.5 :amp 300)
+(defsynth sn5 [out-bus 0 fraction 2]
+  (let [tr_in ( pulse-divider (in:kr root-trg-bus) fraction)
+        env (linen (impulse 0 0.1) 0.1 0.1 0.1 :gate tr_in)
+        rnd_src (lf-saw:kr (pink-noise:kr))
+        ]
+    (out:kr out-bus (* env rnd_src  100000))))
 
-(ctl sn2f :amp 0.01 :in-bus abus1)
+(def sn5f (sn5 [:tail early-g] cbus3))
+
+(kill sn5f)
+
+
+(ctl sn3f :value (/ 10 16) :amp 200)
+
+(ctl sn2f :amp 0.1 :in-bus abus1)
 
 (ctl snf :freq cbus1)
 
@@ -105,8 +119,8 @@
 (def buffer1_pattern [20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0
                       30 40 50 60 30 40 50 60 60 50 40 30 20 50 60 20 ])
 
-(def buffer1_pattern [20 0 0 0 30 0 0 0 20 0 0 0 40 0 0 0
-                      20 0 0 0 50 0 0 0 60 0 0 0 30 0 0 0])
+(def buffer1_pattern [0 20 0 0 0 30 0 0 0 20 0 0 0 40 0 0
+                      0 20 0 0 0 50 0 0 0 60 0 0 0 30 0 0])
 
 (buffer-write! buffer1 buffer1_pattern)
 
@@ -116,6 +130,7 @@
         indexes (dseq (range (buffer-size buffer1)) INF)
         freqs (dbufrd buffer1 indexes)
         note-gen (demand:kr tr_in 0 freqs)
+        note-gen (midicps note-gen)
         env (env-gen (perc attack release) :gate tr_in)
         sawsrc (saw note-gen)
         src2 (+ src1 (decay sawsrc dec) amp)]
@@ -125,10 +140,12 @@
 
 (ctl noisInputf :in-bus abus1 :amp 0.0025)
 
+(kill noisInputf)
+
 (def buffer2_pattern [1 0 0 0 1 0 1 0 1 0 1 0 1 0 0 0
                       1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0])
 
-(def buffer2_pattern [1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0
+(def buffer2_pattern [1 0 0 0 1 0 1 0 1 0 0 0 1 0 0 0
                       1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0])
 
 (def buffer2_pattern [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
@@ -146,12 +163,40 @@
         env2 (env-gen (perc attack release) :gate pulse_trig)
         sp1 (sin-osc note)
         sp2 (sin-osc (* note 2))
-        sp3 (+ env2 (* sp1 sp2))]
-    (out 0 (pan2 (* amp sp3 env2)))))
+        sp3 (+ env2 (* sp1 sp2))
+        sp4 (clip2 sp3 1)]
+    (out 0 (pan2 (* amp sp4 env2)))))
 
-(def dualPulsef (dualPulse :note 15 :amp 1 :fraction 2 :attack 0.1 :sustain 0.2 :release 0.4))
+(def dualPulsef (dualPulse :note 15 :amp 1 :fraction 2 :attack 0.01 :sustain 0.05 :release 0.01))
 
-(ctl dualPulsef :amp 0.1 :note 20 :fraction 1)
+(ctl dualPulsef :amp 1 :note 15 :attack 0.01 :sustain 0.05 :release 0.001)
+
+(kill dualPulsef)
+
+(def buffer4_pattern [0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0
+                      0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0])
+
+(buffer-write! buffer4 buffer4_pattern)
+
+(defsynth snare [amp 1 fraction 2 del 0]
+  (let [tr_in (pulse-divider (in:kr root-trg-bus) fraction)
+        indexes (dseq (range (buffer-size buffer4)) INF)
+        pulses (dbufrd buffer4 indexes)
+        pulse_trig (demand:kr tr_in 0 pulses)
+        pulse_trig (t-delay:kr pulse_trig del)
+        env (linen (impulse 0 0.05) 0.01 0.01 0.05 :gate pulse_trig)
+        snare (* 3 (pink-noise) (apply + (* (decay env [0.05 0.01]) [1 0.05])))
+        snare (+ snare (bpf (* 4 snare) 2000))
+        snare (clip2 snare 1)]
+    (out 0 (* amp snare))))
+
+(def snaref (snare :amp 1))
+
+(ctl snaref :amp 0.5 :del 0 :fraction 2)
+
+(kill snaref)
+
+
 
 (defsynth synther [amp 1 freq 22 in-abus 0 in-cbus 0 dec 0.1 attack 0.1 sustain 0.1 release 0.1 ]
   (let [ in_src (in in-abus)
@@ -164,14 +209,14 @@
 
 (def syntherf (synther :amp 0.0015 :freq 2 :in-abus abus1 :in-cbus cbus1))
 
-(ctl syntherf :amp 0.001 :freq 2 :in-cbus cbus1 :dec 0.1)
+(ctl syntherf :amp 0.02 :freq 2 :in-cbus cbus2 :dec 0.1)
 
 
 (kill 56)
 
 (kill syntherf)
 
-(def buffer3_pattern [60 58 62 50 58 56 61 60 59 58 62 58 60 62 58 60])
+(def buffer3_pattern [60 58 62 60 58 62 60 58 62 60 58 62 60 58 62 60])
 
 (buffer-write! buffer3 buffer3_pattern)
 
@@ -189,10 +234,25 @@
         _ (tap "sig" 60 (a2k sig))]
     (out 0 (pan2 (* amp env sig)))))
 
-(def overpadf (overpad :note 52 :attack 3 :release 1 :amp 0.1 :fraction 20))
+(def overpadf (overpad :note 52 :attack 5 :release 5 :amp 0.1 :fraction 40))
 
-(ctl overpadf :attack 0.5 :release 0.1 :note 60 :fraction 20)
+(ctl overpadf :attack 5 :release 5 :note 60 :fraction 40)
 
 (kill overpadf)
 
-(stop)
+(defsynth noise [freq 44 amp 1 freq2 44]
+  (let [noiseV (pink-noise)
+        src1 (sin-osc noiseV)
+        src2 (sin-osc (* noiseV 0.9 (in:kr freq2)))
+        src3 (lf-saw freq)]
+    (out 0 (pan2 (*  amp (+ src1 src2) src3)))))
+
+(def noisef (noise [:tail later-g] :freq2 cbus1 :amp 0.2))
+
+(ctl noisef :freq2 cbus3 :amp 0.1 :freq 30)
+
+
+
+(kill noisef)
+
+(kill 128)
