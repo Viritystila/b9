@@ -34,6 +34,7 @@
   (do
     ;Control
     (defonce cbus1 (control-bus 1))
+    (defonce cbus2 (control-bus 1))
     ;Audio
     (defonce abus1 (audio-bus))
 
@@ -53,7 +54,7 @@
 
 (def snf (sn [:tail early-g] :freq cbus1  :out-bus abus1))
 
-(control-bus-set! cbus1 22)
+(control-bus-set! cbus1 32)
 
 (defsynth sn2 [in-bus 0 amp 1]
   (let [src (in in-bus)]
@@ -61,20 +62,31 @@
 
 (def sn2f (sn2 [:tail early-g] :in-bus abus1))
 
-(defsynth sn3 [out-bus 0 value 22]
+(defsynth sn3 [out-bus 0 value 22 amp 5]
   (let [ov (sin-osc:kr value)]
-    (out:kr out-bus value)))
+    (out:kr out-bus (* amp ov))))
 
-(def sn3f (sn3 [:tail early-g] :out-bus cbus1 :value 10))
+(def sn3f (sn3 [:tail early-g] :out-bus cbus1 :value 3 :amp 60))
 
+(defsynth sn4 [out-bus 0 value 22 amp 5]
+  (let [ov (lf-saw:kr value)]
+    (out:kr out-bus (* amp ov))))
 
-(ctl sn3f :value 32)
+(def sn4f (sn4 [:tail early-g] :out-bus cbus2 :value 1 :amp 60))
+
+(ctl sn3f :value 3 :amp 60)
 
 (ctl sn2f :amp 0.9 :in-bus abus1)
+
+(ctl snf :freq cbus2)
+
+(ctl sn4f :value 2 :amp 60)
 
 (kill sn2f)
 
 (kill snf)
+
+(kill sn3f)
 
 (pp-node-tree)
 
